@@ -1,0 +1,4 @@
+.DS_Store
+/wandb
+__pycache__
+.env

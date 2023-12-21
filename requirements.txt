@@ -1,0 +1,6 @@
+pandas
+scipy
+wandb
+torch
+torchvision
+python-dotenv
