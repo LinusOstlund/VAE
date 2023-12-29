@@ -15,11 +15,6 @@ class VAE(nn.Module):
         # q(z|x), weights: phi
         self.encoder = encoder
 
-        # Kommer dom här existera i encoder nu istället?
-        # TODO lista ut varför han sätter en tvåa här
-        # self.mean_layer = nn.Linear(latent_dim, 2)
-        # self.logvar_layer = nn.Linear(latent_dim, 2)
-
         # The Decoder (theta)
         # p(x|z), weights: theta
         self.decoder = decoder
@@ -77,8 +72,7 @@ class VAE(nn.Module):
         - torch.Tensor: A tensor containing the generated data at each step of the latent walk, shape (steps**2, 1, 28, 28)
         """
 
-        # Linear interpolation between the start and end points
-        # make a grid of xs, ys
+        # Linear interpolation between the start and end points to make a grid of xs, ys
         z_grid = torch.stack(
             [
                 torch.stack([x, y], dim=0)

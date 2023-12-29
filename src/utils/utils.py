@@ -4,6 +4,9 @@ import torch.nn.functional as F
 import matplotlib.pyplot as plt
 import numpy as np
 
+from PIL import Image
+from torchvision.utils import make_grid
+
 
 def get_device(device) -> torch.device:
     """
@@ -35,3 +38,29 @@ def show(imgs):
         img = F.to_pil_image(img)
         axs[0, i].imshow(np.asarray(img))
         axs[0, i].set(xticklabels=[], yticklabels=[], xticks=[], yticks=[])
+
+
+def convert_grid_to_PIL_image(tensor_grid: torch.Tensor, nrow: int) -> Image.Image:
+    """
+    Convert a grid of vectorized images to a PIL image.
+    Used for storing images in wandb.
+    Args:
+        tensor_grid: grid of vectorized images.
+        nrow: number of rows in the grid.
+    """
+
+    # Unnormalize the images (reverse the normalization)
+    # tensor_grid = tensor_grid * 0.1307 + 0.3081
+
+    # Create a grid of images
+    grid = make_grid(tensor_grid, nrow=nrow).cpu().detach()
+
+    # Convert the grid to a PIL Image
+    # PyTorch format (C, H, W) to NumPy format (H, W, C)
+    grid_np = grid.numpy().transpose((1, 2, 0))
+
+    grid_image = Image.fromarray(
+        np.uint8(grid_np * 255)
+    )  # Scale to 0-255 and convert to uint8
+
+    return grid_image

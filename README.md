@@ -21,8 +21,20 @@ wandb login # Should ask for your API key
 
 You can also store it in a `.env` file (see [.env.example](.env.example)). A .env file is not included in the repository for security reasons, and must be put in root. I think I will have to add you to my W&B project for it to work, but I'm not sure.
 
-To run the code, use the following command:
+To run the code with defaul parameters, use the following command:
 
 ```bash
 python src/main.py
+```
+
+You can also specify parameters using the following syntax:
+
+```bash
+python src/main.py --epochs 100 --batch_size 64
+```
+
+To see all available parameters, run:
+
+```bash
+python src/main.py --help
 ```
