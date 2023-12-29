@@ -13,63 +13,12 @@ from torch.utils.data import DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
 
+from train import train
 from models.VAE import VAE
 from utils.losses import evidence_lower_bound
 from utils.utils import get_device
 from utils.utils import convert_grid_to_PIL_image
 from models.encoders_and_decoders import GaussianMLP, BernoulliDecoder
-
-
-def train(model, optimizer, epochs, device, train_loader, loss_function):
-    """
-    Main training loop
-    """
-    model.train()
-    wandb.watch(model, log="all")
-    losses = []
-    for epoch in range(epochs):
-        running_loss = 0.0
-        for x, _ in tqdm(train_loader, desc=f"Epoch {epoch+1}"):
-            # x shape is [batch_size, channels, 28, 28]
-            batch_size, _, width, height = x.shape
-
-            # vectorize image
-            x = x.reshape(batch_size, width * height).to(device)
-
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward pass
-            x_hat, mean, logvar = model(x)
-            # assert that the mean and logvar contains no NaNs
-            assert not torch.isnan(mean).any()
-
-            # backwards pass: compute loss and its gradients
-            reconstruction_loss, DKL = loss_function(x, x_hat, mean, logvar)
-
-            elbo = reconstruction_loss + DKL
-            elbo.backward()
-
-            # Adjust learning weights
-            optimizer.step()
-
-            running_loss += elbo.item()
-            # logg my three losses
-            wandb.log(
-                {
-                    "train": {
-                        "reconstruction_loss": reconstruction_loss.item(),
-                        "DKL": DKL.item(),
-                        "elbo": elbo.item(),
-                    }
-                },
-            )
-
-        # at the end of each epoch, log the loss
-        epoch_loss = running_loss / len(train_loader.dataset)
-        # wandb.log({"train": {"loss": epoch_loss}}, step=epoch)
-        losses.append(epoch_loss)
-    return losses
 
 
 if __name__ == "__main__":
@@ -82,8 +31,8 @@ if __name__ == "__main__":
     argparser.add_argument(
         "--learning_rate",
         type=float,
-        default=0.0001,
-        # choices=[0.01, 0.02, 0.1],  # taken from the paper
+        default=0.01,
+        choices=[0.01, 0.02, 0.1],  # taken from the paper
     )
     argparser.add_argument("--seed", type=int, default=42)
     argparser.add_argument("--device", type=str, default=None)
@@ -98,22 +47,11 @@ if __name__ == "__main__":
     )
     args = argparser.parse_args()
 
-    wandb.init(
-        project="DD2434",
-        entity="skolprojekt",
-        config={
-            "epochs": args.epochs,
-            "batch_size": args.batch_size,
-            "input_dim": args.input_dim,
-            "hidden_dim": args.hidden_dim,
-            "latent_dim": args.latent_dim,
-            "seed": args.seed,
-            "device": args.device,
-            "dataset": args.dataset,
-            "optimizer": args.optimizer,
-            "learning_rate": args.learning_rate,
-        },
-    )
+    # Convert args to a dictionary
+    config_dict = vars(args)
+
+    # Initialize wandb with the config dictionary
+    wandb.init(project="DD2434", entity="skolprojekt", config=config_dict)
 
     # setting this to "none" will default to the "best" available device: CUDA, MPS (Apple M1), or CPU
     device = get_device(device=args.device)
@@ -201,11 +139,10 @@ if __name__ == "__main__":
         loss_function=elbo,
     )
 
-    # store the model in wandb (not only state_dict)
+    # store the model in wandb
     wandb.save("model.pt")
 
     # save some plots
-
     width = 10
     height = 10
     random_samples = model.sample(width=width, height=height)
