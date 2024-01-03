@@ -52,6 +52,5 @@ def train(model, optimizer, epochs, device, train_loader, loss_function):
 
         # at the end of each epoch, log the loss
         epoch_loss = running_loss / len(train_loader.dataset)
-        # wandb.log({"train": {"loss": epoch_loss}}, step=epoch)
         losses.append(epoch_loss)
     return losses

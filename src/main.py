@@ -18,6 +18,7 @@ from models.VAE import VAE
 from utils.losses import evidence_lower_bound
 from utils.utils import get_device
 from utils.utils import convert_grid_to_PIL_image
+from utils.freys_face import FreyFaceDataset
 from models.encoders_and_decoders import GaussianMLP, BernoulliDecoder
 
 
@@ -53,6 +54,9 @@ if __name__ == "__main__":
     # Initialize wandb with the config dictionary
     wandb.init(project="DD2434", entity="skolprojekt", config=config_dict)
 
+    # set a tag in wandb
+    wandb.run.tags = ["live"]
+
     # setting this to "none" will default to the "best" available device: CUDA, MPS (Apple M1), or CPU
     device = get_device(device=args.device)
 
@@ -60,11 +64,18 @@ if __name__ == "__main__":
         input_dim=args.input_dim, hidden_dim=args.hidden_dim, output_dim=args.latent_dim
     ).to(device)
 
-    decoder = BernoulliDecoder(
-        latent_dim=args.latent_dim,
-        hidden_dim=args.hidden_dim,
-        output_dim=args.input_dim,
-    ).to(device)
+    if args.dataset == "mnist":
+        decoder = BernoulliDecoder(
+            latent_dim=args.latent_dim,
+            hidden_dim=args.hidden_dim,
+            output_dim=args.input_dim,
+        ).to(device)
+    elif args.dataset == "frey":
+        decoder = GaussianMLP(
+            input_dim=args.latent_dim,
+            hidden_dim=args.hidden_dim,
+            output_dim=args.input_dim,
+        ).to(device)
 
     # instantiate model
     model = VAE(
@@ -91,14 +102,11 @@ if __name__ == "__main__":
     transforms = transforms.Compose(
         [
             transforms.ToTensor(),
-            # transforms.Normalize(
-            #    (0.1307,), (0.3081,)
-            # ),  # Normalize to scale data to [-1, 1]
         ]
     )
 
     # download dataset
-    data_path = ".." / Path("data")
+    data_path = Path("data")
 
     if args.dataset == "mnist":
         train_dataset = MNIST(
@@ -109,7 +117,10 @@ if __name__ == "__main__":
         )
         test_dataset = MNIST(data_path, transform=transforms, download=True)
     elif args.dataset == "frey":
-        raise NotImplementedError("Frey dataset not implemented yet.")
+        train_dataset = FreyFaceDataset(
+            file_path=data_path / Path("frey_rawface.mat"), transform=transforms
+        )
+
     else:
         raise ValueError("Dataset not recognized. Pick 'frey' or 'mnist'.")
 
@@ -122,10 +133,6 @@ if __name__ == "__main__":
     sanity_check = convert_grid_to_PIL_image(tensor_grid, nrow=4)
     # Log the grid image to wandb
     wandb.log({"Sanity Check": [wandb.Image(sanity_check, caption="Sanity Check")]})
-
-    test_loader = DataLoader(
-        dataset=test_dataset, batch_size=args.batch_size, shuffle=False
-    )
 
     # setup loss (higher order function)
     elbo = evidence_lower_bound
@@ -143,11 +150,25 @@ if __name__ == "__main__":
     wandb.save("model.pt")
 
     # save some plots
-    width = 10
-    height = 10
-    random_samples = model.sample(width=width, height=height)
 
-    grid_image = convert_grid_to_PIL_image(random_samples, nrow=width)
+    if args.dataset == "frey":
+        image_height = 28
+        image_width = 20
+    else:
+        image_height = 28
+        image_width = 28
+
+    grid_width = 10
+    grid_height = 10
+
+    random_samples = model.sample(
+        grid_width=grid_width,
+        grid_height=grid_height,
+        image_width=image_width,
+        image_height=image_height,
+    )
+
+    grid_image = convert_grid_to_PIL_image(random_samples, nrow=grid_width)
 
     # Log the grid image to wandb
     wandb.log({"Random Samples": [wandb.Image(grid_image, caption="Random Samples")]})
@@ -155,13 +176,18 @@ if __name__ == "__main__":
     steps = 20
     z_start = -1.5
     z_end = 1.5
-
-    latent_walk = model.latent_walk(z_start=z_start, z_end=z_end, steps=steps)
-
-    grid_image = convert_grid_to_PIL_image(latent_walk, nrow=steps)
-
-    # Log the grid image to wandb
-    wandb.log({"Latent Walk": [wandb.Image(grid_image, caption="Latent Walk")]})
+    if args.latent_dim == 2:
+        # perform a walk in the latent space
+        latent_walk = model.latent_walk(
+            z_start=z_start,
+            z_end=z_end,
+            steps=steps,
+            image_width=image_width,
+            image_height=image_height,
+        )
+        grid_image = convert_grid_to_PIL_image(latent_walk, nrow=steps)
+        # Log the grid image to wandb
+        wandb.log({"Latent Walk": [wandb.Image(grid_image, caption="Latent Walk")]})
 
 
 # evaluera på test set

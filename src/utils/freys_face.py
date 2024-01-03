@@ -10,6 +10,42 @@ from urllib.request import urlopen
 from urllib.error import URLError, HTTPError
 from scipy.io import loadmat
 
+import torch
+from torch.utils.data import Dataset, DataLoader
+from torchvision import transforms
+import scipy.io
+
+
+class FreyFaceDataset(Dataset):
+    def __init__(self, file_path, transform=None):
+        # Load the .mat file
+        self.data = scipy.io.loadmat(file_path)["ff"]
+        self.transform = transform
+
+    def __len__(self):
+        # Return the number of samples
+        return self.data.shape[1]
+
+    def __getitem__(self, idx):
+        # Get the image data and reshape it appropriately
+        image = self.data[:, idx].reshape(
+            28, 20
+        )  # Adjust the reshape dimensions as necessary
+        image = image.astype(
+            "float32"
+        )  # / 255.0  # Normalize the image to be between 0 and 1
+
+        # Apply transformations if any
+        if self.transform:
+            image = self.transform(image)
+        else:
+            # If no transform specified, we add a channel dimension
+            image = torch.from_numpy(image).unsqueeze(0)  # Add channel dimension
+
+        # required for my train loop to work lol
+        target = torch.tensor(0)
+        return image, target
+
 
 def fetch_file(url):
     try:

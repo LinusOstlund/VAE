@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+from models.encoders_and_decoders import GaussianMLP
 
 
 class VAE(nn.Module):
@@ -35,11 +36,26 @@ class VAE(nn.Module):
     def forward(self, x):
         mean, log_var = self.encode(x)
         z = self.reparameterization(mean, log_var)
-        # ifall decodern är GaussianMLP så blir x_hat = mean & logvar
+        # ifall decodern är GaussianMLP så blir x_hat = mean, logvar
         x_hat = self.decode(z)
+        if isinstance(self.decoder, GaussianMLP):
+            mean_decoded, log_var_decoded = x_hat
+            # run mean_decoder through sigmoid according to section 5.
+            mean_decoded = torch.sigmoid(mean_decoded)
+            std_decoded = torch.exp(0.5 * log_var_decoded)
+            epsilon = torch.randn_like(std_decoded)
+            x_hat = mean_decoded + epsilon * std_decoded
+
         return x_hat, mean, log_var
 
-    def sample(self, width: int, height: int, **kwargs) -> torch.Tensor:
+    def sample(
+        self,
+        grid_width: int,
+        grid_height: int,
+        image_width: int,
+        image_height: int,
+        **kwargs
+    ) -> torch.Tensor:
         """
         Sample from the prior distribution (standard Gaussian) and generate new data. Width and height of the resulting grid of images (in number of images) can be specified.
 
@@ -49,11 +65,16 @@ class VAE(nn.Module):
         >>> show(grid)
         """
         latent_dim = self.encoder.fc2_mean.out_features
-        z = torch.randn(width * height, latent_dim).to(self.device)
+        z = torch.randn(grid_width * grid_height, latent_dim).to(self.device)
         generated_data = self.decode(z)
-        return generated_data.reshape(width * height, 1, 28, 28)
+        if isinstance(self.decoder, GaussianMLP):
+            # just pick x_hat from the decoder
+            generated_data = generated_data[0]
+        return generated_data.reshape(
+            grid_width * grid_height, 1, image_height, image_width
+        )
 
-    def latent_walk(self, z_start, z_end, steps):
+    def latent_walk(self, z_start, z_end, steps, image_width, image_height):
         """
         Perform a latent walk in the latent space. Use with 2D latent space, and Pytorch visions make_grid function to visualize the walk.
 
@@ -83,6 +104,16 @@ class VAE(nn.Module):
         )
 
         # Decode each point along the walk
-        generated_data = torch.stack([self.decode(z) for z in z_grid], dim=0)
+        # if the decoder is GaussianMLP, then we need to pick x_hat from the decoder
+        # hacky way of doing it, but pythonesque
+        generated_data = torch.stack(
+            [
+                self.decode(z)[0]
+                if isinstance(self.decoder, GaussianMLP)
+                else self.decode(z)
+                for z in z_grid
+            ],
+            dim=0,
+        )
 
-        return generated_data.reshape(steps**2, 1, 28, 28)
+        return generated_data.reshape(steps**2, 1, image_height, image_width)
