@@ -99,9 +99,13 @@ if __name__ == "__main__":
         )
 
     # set up data transformations
+    # binarize the data
+
+    # Binarize the data
     transforms = transforms.Compose(
         [
-            transforms.ToTensor(),
+            transforms.ToTensor(),  # Convert to tensor first
+            transforms.Lambda(lambda x: (x > 0.0).float()),  # Then binarize
         ]
     )
 
@@ -150,14 +154,8 @@ if __name__ == "__main__":
     wandb.save("model.pt")
 
     # save some plots
-
-    if args.dataset == "frey":
-        image_height = 28
-        image_width = 20
-    else:
-        image_height = 28
-        image_width = 28
-
+    image_height = 28
+    image_width = 28
     grid_width = 10
     grid_height = 10
 
@@ -174,8 +172,8 @@ if __name__ == "__main__":
     wandb.log({"Random Samples": [wandb.Image(grid_image, caption="Random Samples")]})
 
     steps = 20
-    z_start = -1.5
-    z_end = 1.5
+    z_start = 0.01
+    z_end = 0.99
     if args.latent_dim == 2:
         # perform a walk in the latent space
         latent_walk = model.latent_walk(
