@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 from models.encoders_and_decoders import GaussianMLP
+import scipy.stats as stats
 
 
 class VAE(nn.Module):
@@ -74,9 +75,13 @@ class VAE(nn.Module):
             grid_width * grid_height, 1, image_height, image_width
         )
 
-    def latent_walk(self, z_start, z_end, steps, image_width, image_height):
+    def latent_walk(
+        self, z_start=0, z_end=1, steps=20, image_width=20, image_height=20
+    ):
         """
         Perform a latent walk in the latent space. Use with 2D latent space, and Pytorch visions make_grid function to visualize the walk.
+
+        Idea is to sample from the unit square using the inverse CDF of the standard normal distribution, and then decode the samples to generate new data. This works because the prior is standard normal.
 
         Example usage:
         >>> steps = 10
@@ -92,20 +97,28 @@ class VAE(nn.Module):
         Returns:
         - torch.Tensor: A tensor containing the generated data at each step of the latent walk, shape (steps**2, 1, 28, 28)
         """
-
         # Linear interpolation between the start and end points to make a grid of xs, ys
         z_grid = torch.stack(
             [
-                torch.stack([x, y], dim=0)
-                for x in torch.linspace(z_start, z_end, steps).to(self.device)
-                for y in torch.linspace(z_start, z_end, steps).to(self.device)
+                torch.stack(
+                    [
+                        torch.tensor(x, device=self.device, dtype=torch.float32),
+                        torch.tensor(y, device=self.device, dtype=torch.float32),
+                    ],
+                    dim=0,
+                )
+                for x in stats.norm.ppf(
+                    torch.linspace(z_start, z_end, steps).numpy(force=True)
+                )
+                for y in stats.norm.ppf(
+                    torch.linspace(z_start, z_end, steps).numpy(force=True)
+                )
             ],
             dim=0,
         )
 
         # Decode each point along the walk
         # if the decoder is GaussianMLP, then we need to pick x_hat from the decoder
-        # hacky way of doing it, but pythonesque
         generated_data = torch.stack(
             [
                 self.decode(z)[0]
@@ -114,6 +127,6 @@ class VAE(nn.Module):
                 for z in z_grid
             ],
             dim=0,
-        )
+        ).to(self.device)
 
         return generated_data.reshape(steps**2, 1, image_height, image_width)

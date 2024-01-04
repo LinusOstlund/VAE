@@ -32,12 +32,10 @@ def train(model, optimizer, epochs, device, train_loader, loss_function):
             # backwards pass: compute loss and its gradients
             reconstruction_loss, DKL = loss_function(x, x_hat, mean, logvar)
 
-            elbo = reconstruction_loss + DKL
+            elbo = reconstruction_loss - DKL
+
             elbo.backward()
-
-            # Adjust learning weights
             optimizer.step()
-
             running_loss += elbo.item()
             # logg my three losses
             wandb.log(
@@ -45,7 +43,8 @@ def train(model, optimizer, epochs, device, train_loader, loss_function):
                     "train": {
                         "reconstruction_loss": reconstruction_loss.item(),
                         "DKL": DKL.item(),
-                        "elbo": elbo.item(),
+                        # logging the negative elbo...
+                        "elbo": -elbo.item(),
                     }
                 },
             )
